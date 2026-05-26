@@ -2,7 +2,9 @@
   "name": "pi-ketchup",
   "version": "0.1.0",
   "description": "LLM-powered guardrails for the pi coding agent. Turn every AI mistake into a rule AI can't repeat.",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package"
+  ],
   "license": "MIT",
   "author": {
     "name": "pi-ketchup contributors"
@@ -16,6 +18,11 @@
     "micromatch": "^4.0.8"
   },
   "pi": {
-    "extensions": ["./extensions"]
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1"
   }
 }

@@ -14,6 +14,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { BRAND } from "../src/brand.js";
 import { initKetchup, formatInitResult } from "../src/init.js";
 import { createHookState } from "../src/hook-state.js";
@@ -45,17 +46,14 @@ import {
 
 // Resolve the extension's own root directory
 const EXTENSION_ROOT = path.resolve(
-	path.dirname(new URL(import.meta.url).pathname),
+	path.dirname(fileURLToPath(import.meta.url)),
 	"..",
 );
 
 // Cached reminders to inject per-turn
 let cachedReminders = "";
 
-function isProtectedPath(
-	filePath: string,
-	validatorsDirs: string[],
-): boolean {
+function isProtectedPath(filePath: string, validatorsDirs: string[]): boolean {
 	return validatorsDirs.some((dir) => filePath.startsWith(`${dir}/`));
 }
 
@@ -67,10 +65,7 @@ export default function ketchupExtension(pi: ExtensionAPI) {
 		if (!fs.existsSync(paths.autoDir)) {
 			// Not initialized yet — inject init hint as a reminder
 			cachedReminders = `Reminder: Use /ketchup:init to enable ${BRAND.displayName} guardrails in this project.`;
-			ctx.ui.notify(
-				`Ketchup: run /ketchup:init to enable guardrails`,
-				"info",
-			);
+			ctx.ui.notify(`Ketchup: run /ketchup:init to enable guardrails`, "info");
 			return;
 		}
 
@@ -210,11 +205,7 @@ export default function ketchupExtension(pi: ExtensionAPI) {
 
 			// Commit validation
 			if (command && isCommitCommand(command)) {
-				return await handleCommitValidation(
-					paths,
-					command,
-					ctx.cwd,
-				);
+				return await handleCommitValidation(paths, command, ctx.cwd);
 			}
 		}
 
@@ -253,8 +244,7 @@ export default function ketchupExtension(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("ketchup:config", {
-		description:
-			"Manage Ketchup configuration (show, validators, reminders)",
+		description: "Manage Ketchup configuration (show, validators, reminders)",
 		handler: async (args, ctx) => {
 			const paths = resolvePaths(ctx.cwd, EXTENSION_ROOT);
 
@@ -306,8 +296,7 @@ export default function ketchupExtension(pi: ExtensionAPI) {
 				} else {
 					const validators = listValidators(paths);
 					const lines = validators.map(
-						(v) =>
-							`${v.enabled ? "✓" : "✗"} ${v.name} — ${v.description}`,
+						(v) => `${v.enabled ? "✓" : "✗"} ${v.name} — ${v.description}`,
 					);
 					ctx.ui.notify(lines.join("\n"), "info");
 				}
@@ -331,10 +320,7 @@ export default function ketchupExtension(pi: ExtensionAPI) {
 						hook: parts[3] !== "--content" ? parts[3] : undefined,
 						content: rest || `Custom reminder: ${parts[2]}`,
 					});
-					ctx.ui.notify(
-						`Reminder created: ${filePath}`,
-						"info",
-					);
+					ctx.ui.notify(`Reminder created: ${filePath}`, "info");
 				} else {
 					const reminders = listReminders(paths);
 					const lines = reminders.map(
@@ -384,17 +370,10 @@ export default function ketchupExtension(pi: ExtensionAPI) {
 			paths.validatorsDirs,
 			state.overrides.validators,
 		);
-		const validators = allValidators.filter(
-			(v) => v.name !== "appeal-system",
-		);
+		const validators = allValidators.filter((v) => v.name !== "appeal-system");
 
 		if (validators.length === 0) {
-			activityLog(
-				paths.autoDir,
-				"",
-				"commit",
-				"allowed (no validators)",
-			);
+			activityLog(paths.autoDir, "", "commit", "allowed (no validators)");
 			return undefined;
 		}
 
@@ -412,11 +391,7 @@ export default function ketchupExtension(pi: ExtensionAPI) {
 			return undefined;
 		}
 
-		const onLog = (
-			event: string,
-			name: string,
-			detail?: string,
-		) => {
+		const onLog = (event: string, name: string, detail?: string) => {
 			activityLog(
 				paths.autoDir,
 				"",
@@ -439,12 +414,7 @@ export default function ketchupExtension(pi: ExtensionAPI) {
 
 		if (nacks.length > 0) {
 			const blockMessage = formatBlockMessage(results);
-			activityLog(
-				paths.autoDir,
-				"",
-				"commit",
-				`blocked: ${blockMessage}`,
-			);
+			activityLog(paths.autoDir, "", "commit", `blocked: ${blockMessage}`);
 			debugLog(paths.autoDir, "commit", `blocked: ${blockMessage}`);
 
 			if (state.validateCommit.mode === "warn") {

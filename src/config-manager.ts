@@ -55,7 +55,7 @@ export function listValidators(
 	overrides?: OverridesState,
 ): ValidatorStatus[] {
 	const state =
-		overrides ?? createHookState(paths.autoDir).read().overrides;
+		overrides ?? createHookState(paths.autoDir).read().overrides ?? {};
 	const statuses: ValidatorStatus[] = [];
 	const seen = new Set<string>();
 
@@ -91,7 +91,7 @@ export function listReminders(
 	overrides?: OverridesState,
 ): ReminderStatus[] {
 	const state =
-		overrides ?? createHookState(paths.autoDir).read().overrides;
+		overrides ?? createHookState(paths.autoDir).read().overrides ?? {};
 	const statuses: ReminderStatus[] = [];
 	const seen = new Set<string>();
 
@@ -225,18 +225,11 @@ function setNestedValue(
 	current[keys[keys.length - 1]] = value;
 }
 
-function formatYaml(
-	obj: Record<string, unknown>,
-	indent = 0,
-): string {
+function formatYaml(obj: Record<string, unknown>, indent = 0): string {
 	let result = "";
 	const prefix = "  ".repeat(indent);
 	for (const [key, val] of Object.entries(obj)) {
-		if (
-			typeof val === "object" &&
-			val !== null &&
-			!Array.isArray(val)
-		) {
+		if (typeof val === "object" && val !== null && !Array.isArray(val)) {
 			result += `${prefix}${key}:\n${formatYaml(val as Record<string, unknown>, indent + 1)}`;
 		} else {
 			result += `${prefix}${key}: ${val}\n`;
