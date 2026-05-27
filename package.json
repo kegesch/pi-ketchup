@@ -14,6 +14,7 @@
     "url": "https://github.com/BeOnAuto/ketchup"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "*",
     "gray-matter": "^4.0.3",
     "micromatch": "^4.0.8"
   },

@@ -1,35 +1,9 @@
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
+import {
+	createAgentSession,
+	SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import type { Validator } from "./validator-loader.js";
-
-export interface SpawnResult {
-	stdout: string;
-	stderr: string;
-	status: number | null;
-}
-
-export function spawnAsync(
-	cmd: string,
-	args: string[],
-	_options: { encoding: "utf8" },
-): Promise<SpawnResult> {
-	return new Promise((resolve, reject) => {
-		const child = spawn(cmd, args, {
-			stdio: ["ignore", "pipe", "pipe"],
-		});
-		let stdout = "";
-		let stderr = "";
-		child.stdout.on("data", (data: Buffer) => {
-			stdout += data.toString();
-		});
-		child.stderr.on("data", (data: Buffer) => {
-			stderr += data.toString();
-		});
-		child.on("error", reject);
-		child.on("close", (status) => {
-			resolve({ stdout, stderr, status });
-		});
-	});
-}
 
 export function isCommitCommand(command: string): boolean {
 	return /\bgit\s+commit\b/.test(command);
@@ -69,11 +43,37 @@ export function extractAppeal(message: string): string | null {
 	return match ? match[1].trim() : null;
 }
 
-export type Executor = (
-	cmd: string,
-	args: string[],
-	options: { encoding: "utf8" },
-) => SpawnResult | Promise<SpawnResult>;
+/**
+ * SDK-based executor: creates a new pi agent session, sends the prompt,
+ * and collects the full text response. Replaces the old subprocess spawn.
+ */
+async function sdkExecutor(prompt: string): Promise<string> {
+	const { session } = await createAgentSession({
+		sessionManager: SessionManager.inMemory(),
+	});
+
+	// Collect streaming output
+	let response = "";
+	session.subscribe((event: any) => {
+		if (
+			event.type === "message_update" &&
+			event.assistantMessageEvent.type === "text_delta"
+		) {
+			response += event.assistantMessageEvent.delta;
+		}
+	});
+
+	try {
+		await session.prompt(prompt);
+		await session.agent.waitForIdle();
+	} finally {
+		session.dispose();
+	}
+
+	return response;
+}
+
+export type Executor = (prompt: string) => Promise<string>;
 
 export interface ValidatorResult {
 	decision: "ACK" | "NACK";
@@ -100,7 +100,9 @@ export function parsePiJsonOutput(stdout: string): ValidatorResult {
 	}
 
 	// Try to find JSON in the output (model may wrap it in text)
-	const jsonMatch = stdout.match(/\{[\s\S]*?"decision"\s*:\s*"(ACK|NACK)"[\s\S]*?\}/);
+	const jsonMatch = stdout.match(
+		/\{[\s\S]*?"decision"\s*:\s*"(ACK|NACK)"[\s\S]*?\}/,
+	);
 	if (jsonMatch) {
 		try {
 			const parsed = JSON.parse(jsonMatch[0]);
@@ -139,8 +141,7 @@ function buildAppealPrompt(
 ): string {
 	const resultsText = results
 		.map(
-			(r) =>
-				`${r.validator}: ${r.decision}${r.reason ? ` - ${r.reason}` : ""}`,
+			(r) => `${r.validator}: ${r.decision}${r.reason ? ` - ${r.reason}` : ""}`,
 		)
 		.join("\n");
 
@@ -168,26 +169,24 @@ ${appealValidator.content}`;
 }
 
 /**
- * Run a single validator using `pi -p` as subprocess.
+ * Run a single validator using the pi SDK.
  */
 export async function runValidator(
 	validator: Validator,
 	context: CommitContext,
-	executor: Executor = spawnAsync,
+	executor: Executor = sdkExecutor,
 ): Promise<ValidatorResult> {
 	const prompt = buildPrompt(validator, context);
-	const args = ["-p", prompt];
-	const opts = { encoding: "utf8" } as const;
 
-	const first = await executor("pi", args, opts);
-	const firstResult = parsePiJsonOutput(first.stdout);
+	const first = await executor(prompt);
+	const firstResult = parsePiJsonOutput(first);
 	if (firstResult !== INVALID_RESPONSE) {
 		return firstResult;
 	}
 
 	// Retry once on invalid response
-	const second = await executor("pi", args, opts);
-	return parsePiJsonOutput(second.stdout);
+	const second = await executor(prompt);
+	return parsePiJsonOutput(second);
 }
 
 export async function runAppealValidator(
@@ -195,19 +194,12 @@ export async function runAppealValidator(
 	context: CommitContext,
 	results: CommitValidationResult[],
 	appeal: string,
-	executor: Executor = spawnAsync,
+	executor: Executor = sdkExecutor,
 ): Promise<ValidatorResult> {
-	const prompt = buildAppealPrompt(
-		appealValidator,
-		context,
-		results,
-		appeal,
-	);
-	const result = await executor("pi", ["-p", prompt], {
-		encoding: "utf8",
-	});
+	const prompt = buildAppealPrompt(appealValidator, context, results, appeal);
+	const response = await executor(prompt);
 
-	return parsePiJsonOutput(result.stdout);
+	return parsePiJsonOutput(response);
 }
 
 const NON_APPEALABLE_VALIDATORS = ["no-dangerous-git"];
@@ -343,7 +335,11 @@ export function parseBatchedOutput(
 		}));
 	}
 
-	const results: { validator: string; decision: "ACK" | "NACK"; reason?: string }[] = [];
+	const results: {
+		validator: string;
+		decision: "ACK" | "NACK";
+		reason?: string;
+	}[] = [];
 	for (const name of validatorNames) {
 		const entry = findEntryByName(parsed, name);
 		if (!entry || !isValidDecision(entry.decision)) {
@@ -353,7 +349,11 @@ export function parseBatchedOutput(
 				reason: "validator missing or invalid in batched response",
 			});
 		} else {
-			const result: { validator: string; decision: "ACK" | "NACK"; reason?: string } = {
+			const result: {
+				validator: string;
+				decision: "ACK" | "NACK";
+				reason?: string;
+			} = {
 				validator: name,
 				decision: entry.decision,
 			};
@@ -369,7 +369,6 @@ export function parseBatchedOutput(
 export async function validateCommit(
 	validators: Validator[],
 	context: CommitContext,
-	executor: Executor = spawnAsync,
 	onLog?: ValidatorLogger,
 	batchCount: number = BATCH_COUNT,
 ): Promise<CommitValidationResult[]> {
@@ -381,26 +380,22 @@ export async function validateCommit(
 
 		try {
 			const prompt = buildBatchedPrompt(chunk, context);
-			const spawnResult = await executor("pi", ["-p", prompt], {
-				encoding: "utf8",
-			});
-			const batchResults = parseBatchedOutput(spawnResult.stdout, names);
+			const response = await sdkExecutor(prompt);
+			const batchResults = parseBatchedOutput(response, names);
 
-			const commitResults: CommitValidationResult[] = batchResults.map(
-				(br) => {
-					onLog?.(
-						"complete",
-						br.validator,
-						`${br.decision}${br.reason ? `: ${br.reason}` : ""}`,
-					);
-					return {
-						validator: br.validator,
-						decision: br.decision,
-						reason: br.reason,
-						appealable: !NON_APPEALABLE_VALIDATORS.includes(br.validator),
-					};
-				},
-			);
+			const commitResults: CommitValidationResult[] = batchResults.map((br) => {
+				onLog?.(
+					"complete",
+					br.validator,
+					`${br.decision}${br.reason ? `: ${br.reason}` : ""}`,
+				);
+				return {
+					validator: br.validator,
+					decision: br.decision,
+					reason: br.reason,
+					appealable: !NON_APPEALABLE_VALIDATORS.includes(br.validator),
+				};
+			});
 
 			return commitResults;
 		} catch (err) {
