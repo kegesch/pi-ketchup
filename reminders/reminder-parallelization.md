@@ -31,7 +31,7 @@ The dependency graph tells you which bursts can run in parallel:
 
 When the plan has independent bursts, launch a sub-agent per burst (or per cluster of related bursts) using the Task tool. Each sub-agent gets:
 
-- The CLAUDE.md context (the same rules apply, no exceptions for sub-agents).
+- The Agents.md context (the same rules apply, no exceptions for sub-agents).
 - The relevant slice of `ketchup-plan.md`.
 - An explicit list of bursts it owns and the dependencies it can assume are complete.
 

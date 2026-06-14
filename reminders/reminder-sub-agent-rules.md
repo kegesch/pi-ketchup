@@ -8,16 +8,16 @@ priority: 100
 
 When spawning a Task agent (sub-agent), ensure:
 
-1. **Include CLAUDE.md context** - Sub-agents must receive and follow these rules
+1. **Include Agents.md context** - Sub-agents must receive and follow these rules
 2. **Include ketchup-plan.md** - Sub-agents work from the same plan
 3. **No orphan work** - Sub-agent output must be committed by parent or sub-agent
 
-Sub-agents follow identical rules to the parent. They are not exempt from any CLAUDE.md requirements.
+Sub-agents follow identical rules to the parent. They are not exempt from any Agents.md requirements.
 
 ## Prompt Pattern
 
 ```
-You are working on [bottle name]. Follow CLAUDE.md rules exactly.
+You are working on [bottle name]. Follow Agents.md rules exactly.
 
 Your burst: [burst description]
 Dependencies: [list completed bursts this depends on, or "none"]
@@ -25,3 +25,5 @@ Parallel with: [list of bursts running concurrently]
 
 [specific instructions]
 ```
+
+## Try to use small local models for subagents to be efficient as possible and scope the tasks correspondingly
