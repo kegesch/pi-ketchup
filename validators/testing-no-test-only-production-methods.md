@@ -2,6 +2,7 @@
 name: testing-no-test-only-production-methods
 description: Blocks production methods that exist solely to serve tests
 enabled: true
+tier: 2
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

@@ -2,6 +2,7 @@
 name: coverage-rules
 description: Enforces 100% code coverage requirements
 enabled: true
+tier: 0
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

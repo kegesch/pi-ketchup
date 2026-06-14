@@ -1,9 +1,7 @@
 import { execSync } from "node:child_process";
-import {
-	createAgentSession,
-	SessionManager,
-} from "@earendil-works/pi-coding-agent";
 import type { Validator } from "./validator-loader.js";
+import { runTier0Checkers, DEFAULT_HELPERS } from "./tier0-checker.js";
+import type { TierModel } from "./model-router.js";
 
 export function isCommitCommand(command: string): boolean {
 	return /\bgit\s+commit\b/.test(command);
@@ -13,6 +11,10 @@ export interface CommitContext {
 	diff: string;
 	files: string[];
 	message: string;
+	/** Raw commit command — available to deterministic (tier-0) checkers. */
+	command: string;
+	/** Working dir — used to read staged file content (tier-0). */
+	cwd: string;
 }
 
 export function getCommitContext(cwd: string, command: string): CommitContext {
@@ -25,7 +27,7 @@ export function getCommitContext(cwd: string, command: string): CommitContext {
 	const files = filesOutput.trim().split("\n").filter(Boolean);
 	const message = extractCommitMessage(command);
 
-	return { diff, files, message };
+	return { diff, files, message, command, cwd: gitCwd };
 }
 
 export function extractCdTarget(command: string): string | null {
@@ -47,9 +49,18 @@ export function extractAppeal(message: string): string | null {
  * SDK-based executor: creates a new pi agent session, sends the prompt,
  * and collects the full text response. Replaces the old subprocess spawn.
  */
-async function sdkExecutor(prompt: string): Promise<string> {
+async function sdkExecutor(prompt: string, model?: TierModel): Promise<string> {
+	// Lazy-load the SDK so this module stays importable without the pi runtime
+	// present (keeps validators unit-testable) and only pays the import cost when
+	// a real model call actually runs.
+	const { createAgentSession, SessionManager } = await import(
+		"@earendil-works/pi-coding-agent"
+	);
+	// `model` is a structural view; the runtime object is a real Model from the
+	// registry, so cast through `never` to satisfy the SDK's Model<any> param.
 	const { session } = await createAgentSession({
 		sessionManager: SessionManager.inMemory(),
+		...(model ? { model: model as never } : {}),
 	});
 
 	// Collect streaming output
@@ -272,32 +283,29 @@ function chunkArray<T>(arr: T[], count: number): T[][] {
 	return chunks;
 }
 
-function extractJsonArray(raw: string): unknown[] | null {
+function safeJsonParse(text: string): unknown {
 	try {
-		const parsed = JSON.parse(raw);
-		if (Array.isArray(parsed)) return parsed;
+		return JSON.parse(text);
 	} catch {
-		/* */
+		// Expected for non-JSON output; callers treat undefined/non-array as no match.
+		return undefined;
 	}
+}
+
+function extractJsonArray(raw: string): unknown[] | null {
+	const direct = safeJsonParse(raw);
+	if (Array.isArray(direct)) return direct;
 
 	const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
 	if (fenceMatch) {
-		try {
-			const parsed = JSON.parse(fenceMatch[1]);
-			if (Array.isArray(parsed)) return parsed;
-		} catch {
-			/* */
-		}
+		const parsed = safeJsonParse(fenceMatch[1]);
+		if (Array.isArray(parsed)) return parsed;
 	}
 
 	const bracketMatch = raw.match(/\[[\s\S]*\]/);
 	if (bracketMatch) {
-		try {
-			const parsed = JSON.parse(bracketMatch[0]);
-			if (Array.isArray(parsed)) return parsed;
-		} catch {
-			/* */
-		}
+		const parsed = safeJsonParse(bracketMatch[0]);
+		if (Array.isArray(parsed)) return parsed;
 	}
 
 	return null;
@@ -366,24 +374,120 @@ export function parseBatchedOutput(
 	return results;
 }
 
+export interface TierModels {
+	/** Small / local model for tier-1 validators. undefined = pi default. */
+	tier1?: TierModel;
+	/** Capable model for tier-2 validators. undefined = pi default. */
+	tier2?: TierModel;
+}
+
+/**
+ * Run all validators for a commit, routing each by its tier:
+ *   - tier 0: deterministic code (no model, no tokens)
+ *   - tier 1: configured small model (or pi default if unset)
+ *   - tier 2: configured capable model (or pi default if unset)
+ */
 export async function validateCommit(
 	validators: Validator[],
 	context: CommitContext,
 	onLog?: ValidatorLogger,
 	batchCount: number = BATCH_COUNT,
+	tierModels: TierModels = {},
+	/** Test seam: override the LLM executor. Defaults to the real SDK executor. */
+	executor?: (prompt: string, model?: TierModel) => Promise<string>,
 ): Promise<CommitValidationResult[]> {
+	const tier0 = validators.filter((v) => v.tier === 0);
+	const tier1 = validators.filter((v) => v.tier === 1);
+	const tier2 = validators.filter(
+		(v) => v.tier >= 2 || (!v.tier && v.tier !== 0),
+	);
+
+	const exec = executor ?? ((prompt, model) => sdkExecutor(prompt, model));
+	const tier0Results = runTier0Chunk(tier0, context, onLog);
+	const tier1Results = runTieredChunk(
+		tier1,
+		context,
+		onLog,
+		batchCount,
+		tierModels.tier1,
+		1,
+		exec,
+	);
+	const tier2Results = runTieredChunk(
+		tier2,
+		context,
+		onLog,
+		batchCount,
+		tierModels.tier2,
+		2,
+		exec,
+	);
+
+	const [t0, t1, t2] = await Promise.all([
+		tier0Results,
+		tier1Results,
+		tier2Results,
+	]);
+	return [...t0, ...t1, ...t2];
+}
+
+/** Tier-0: deterministic checkers — synchronous, parallel, no model. */
+function runTier0Chunk(
+	validators: Validator[],
+	context: CommitContext,
+	onLog?: ValidatorLogger,
+): CommitValidationResult[] {
+	if (validators.length === 0) return [];
+	const names = validators.map((v) => v.name);
+	for (const name of names) {
+		onLog?.("spawn", name, "tier-0 deterministic");
+	}
+	const results = runTier0Checkers(names, context, DEFAULT_HELPERS);
+	return results.map((r) => {
+		onLog?.(
+			"complete",
+			r.validator,
+			`${r.decision}${r.reason ? `: ${r.reason}` : ""}`,
+		);
+		return {
+			validator: r.validator,
+			decision: r.decision,
+			reason: r.reason,
+			appealable: !NON_APPEALABLE_VALIDATORS.includes(r.validator),
+		};
+	});
+}
+
+/** Tier-1/2: batched LLM execution against the tier's configured model. */
+async function runTieredChunk(
+	validators: Validator[],
+	context: CommitContext,
+	onLog: ValidatorLogger | undefined,
+	batchCount: number,
+	model: TierModel | undefined,
+	tier: 1 | 2,
+	executor: (
+		prompt: string,
+		model?: TierModel,
+	) => Promise<string> = sdkExecutor,
+): Promise<CommitValidationResult[]> {
+	if (validators.length === 0) return [];
 	const chunks = chunkArray(validators, batchCount);
 
 	const pending = chunks.map(async (chunk, chunkIndex) => {
 		const names = chunk.map((v) => v.name);
-		onLog?.("spawn", `batch-${chunkIndex}`, `validators: ${names.join(", ")}`);
+		onLog?.(
+			"spawn",
+			`tier${tier}-batch-${chunkIndex}`,
+			`validators: ${names.join(", ")}`,
+		);
 
 		try {
 			const prompt = buildBatchedPrompt(chunk, context);
-			const response = await sdkExecutor(prompt);
+			const response = await executor(prompt, model);
 			const batchResults = parseBatchedOutput(response, names);
 
-			const commitResults: CommitValidationResult[] = batchResults.map((br) => {
+			return batchResults.map((br): CommitValidationResult => {
 				onLog?.(
 					"complete",
 					br.validator,
@@ -396,10 +500,8 @@ export async function validateCommit(
 					appealable: !NON_APPEALABLE_VALIDATORS.includes(br.validator),
 				};
 			});
-
-			return commitResults;
 		} catch (err) {
-			onLog?.("error", `batch-${chunkIndex}`, String(err));
+			onLog?.("error", `tier${tier}-batch-${chunkIndex}`, String(err));
 			return chunk.map((v) => ({
 				validator: v.name,
 				decision: "NACK" as const,

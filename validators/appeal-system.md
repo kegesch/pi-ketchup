@@ -2,6 +2,7 @@
 name: appeal-system
 description: Evaluates appeals against validator NACKs
 enabled: true
+tier: 2
 ---
 
 You are the appeal system. You receive validator results and an appeal, and decide whether the appeal justifies overriding the NACKs.

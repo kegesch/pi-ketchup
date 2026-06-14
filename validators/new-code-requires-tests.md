@@ -2,6 +2,7 @@
 name: new-code-requires-tests
 description: Enforces that new behavioral code has accompanying tests
 enabled: true
+tier: 1
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

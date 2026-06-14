@@ -10,6 +10,7 @@ export interface ValidatorStatus {
 	name: string;
 	description: string;
 	enabled: boolean;
+	tier: number;
 	source: string;
 	overridden: boolean;
 }
@@ -21,6 +22,8 @@ export interface ReminderStatus {
 	enabled: boolean;
 	source: string;
 	overridden: boolean;
+	/** File extensions this reminder applies to (empty/undefined = hook-based). */
+	extensions?: string[];
 }
 
 export interface ConfigShowResult {
@@ -77,6 +80,7 @@ export function listValidators(
 				name: meta.name,
 				description: meta.description,
 				enabled,
+				tier: meta.tier,
 				source: dir,
 				overridden: override !== undefined,
 			});
@@ -114,6 +118,7 @@ export function listReminders(
 				enabled,
 				source: dir,
 				overridden: override !== undefined,
+				extensions: reminder.extensions,
 			});
 		}
 	}

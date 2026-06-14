@@ -2,6 +2,7 @@
 name: backwards-compat
 description: Enforces clean breaks over compatibility hacks
 enabled: true
+tier: 2
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

@@ -2,6 +2,7 @@
 name: burst-atomicity
 description: Validates commits are single focused bursts
 enabled: true
+tier: 2
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

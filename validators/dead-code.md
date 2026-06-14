@@ -2,6 +2,7 @@
 name: dead-code
 description: Detects unused code that should be removed
 enabled: true
+tier: 2
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

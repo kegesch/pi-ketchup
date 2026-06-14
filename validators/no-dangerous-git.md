@@ -2,6 +2,7 @@
 name: no-dangerous-git
 description: Blocks dangerous git commands
 enabled: true
+tier: 0
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.
@@ -24,7 +25,7 @@ These operations are forbidden and cannot be overridden:
 **NACK reasoning:**
 - `--force` can destroy team members' work
 - `--no-verify` bypasses all safety checks
-- These are explicitly listed as "DO NOT EVER ALLOW" in CLAUDE.md
+- These are explicitly listed as "DO NOT EVER ALLOW" in Agents.md
 
 **ACK if:**
 - The git command does not contain dangerous flags

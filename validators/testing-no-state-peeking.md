@@ -2,6 +2,7 @@
 name: testing-no-state-peeking
 description: Prohibits testing internal state instead of behavior
 enabled: true
+tier: 1
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

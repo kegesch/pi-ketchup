@@ -2,6 +2,7 @@
 name: testing-structure
 description: Enforces test structure and whole object assertions
 enabled: true
+tier: 2
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

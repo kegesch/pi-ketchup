@@ -2,6 +2,7 @@
 name: testing-stubs-over-mocks
 description: Prefers deterministic stubs over mocks
 enabled: true
+tier: 1
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

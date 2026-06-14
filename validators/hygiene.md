@@ -2,6 +2,7 @@
 name: hygiene
 description: Enforces codebase hygiene and organization rules
 enabled: true
+tier: 0
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

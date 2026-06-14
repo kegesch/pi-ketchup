@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { BRAND } from "./brand.js";
+import type { TierModelRef } from "./model-router.js";
 
 export type CommitMode = "strict" | "warn" | "off";
 
@@ -25,6 +26,13 @@ export interface SubagentHooksState {
 	validateCommitOnUnknown: boolean;
 }
 
+export interface ModelsState {
+	/** Small / local model for tier-1 validators. null = use pi default. */
+	tier1: TierModelRef | null;
+	/** Capable model for tier-2 validators. null = use pi default. */
+	tier2: TierModelRef | null;
+}
+
 export interface ValidatorOverride {
 	enabled: boolean;
 }
@@ -44,6 +52,7 @@ export interface HookState {
 	denyList: DenyListState;
 	promptReminder: PromptReminderState;
 	subagentHooks: SubagentHooksState;
+	models: ModelsState;
 	overrides: OverridesState;
 }
 
@@ -63,6 +72,10 @@ export const DEFAULT_HOOK_STATE: HookState = {
 		validateCommitOnExplore: false,
 		validateCommitOnWork: true,
 		validateCommitOnUnknown: true,
+	},
+	models: {
+		tier1: null,
+		tier2: null,
 	},
 	overrides: {
 		validators: {},
@@ -108,6 +121,10 @@ export function createHookState(autoDir: string): HookStateManager {
 				...DEFAULT_HOOK_STATE.subagentHooks,
 				...partial.subagentHooks,
 			},
+			models: {
+				tier1: partial.models?.tier1 ?? null,
+				tier2: partial.models?.tier2 ?? null,
+			},
 			overrides: {
 				validators: {
 					...DEFAULT_HOOK_STATE.overrides.validators,
@@ -148,6 +165,10 @@ export function createHookState(autoDir: string): HookStateManager {
 			subagentHooks: {
 				...current.subagentHooks,
 				...updates.subagentHooks,
+			},
+			models: {
+				tier1: updates.models?.tier1 ?? current.models.tier1 ?? null,
+				tier2: updates.models?.tier2 ?? current.models.tier2 ?? null,
 			},
 			overrides: {
 				validators: {

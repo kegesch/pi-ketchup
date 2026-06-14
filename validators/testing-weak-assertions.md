@@ -2,6 +2,7 @@
 name: testing-weak-assertions
 description: Prohibits weak test assertions
 enabled: true
+tier: 0
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

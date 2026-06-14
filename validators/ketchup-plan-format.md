@@ -2,6 +2,7 @@
 name: ketchup-plan-format
 description: Validates ketchup-plan.md structure and format
 enabled: true
+tier: 0
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

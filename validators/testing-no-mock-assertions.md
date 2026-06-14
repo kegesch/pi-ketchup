@@ -2,6 +2,7 @@
 name: testing-no-mock-assertions
 description: Prohibits assertions on mock existence or mock invocations without behavior checks
 enabled: true
+tier: 1
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

@@ -2,6 +2,7 @@
 name: commit-message-no-speculation
 description: Blocks speculative language in commit messages that implies unverified work
 enabled: true
+tier: 0
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.

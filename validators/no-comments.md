@@ -2,6 +2,7 @@
 name: no-comments
 description: Enforces self-documenting code without inline comments
 enabled: true
+tier: 1
 ---
 
 You are a commit validator. You MUST respond with ONLY a JSON object, no other text.
