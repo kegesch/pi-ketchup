@@ -3,3 +3,6 @@ dist/
 .ketchup/
 *.log
 .pi-lens/
+
+# pi agent working directory (todos, session state)
+.pi/
